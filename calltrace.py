@@ -23,26 +23,30 @@
 import gdb
 import subprocess
 import re
+import platform
 
 
 def addr2line(elf, addr, verbose=False):
     cmd = "addr2line -e %s 0x%x 2>/dev/null" % (elf, addr)
     if verbose:
-        print "executing: '%s'" % cmd
-    output = subprocess.check_output(cmd, shell=True)
+        print("executing: '%s'" % cmd)
+    output = subprocess.check_output(cmd, shell=True, encoding='utf8')
     if verbose:
-        print output
+        print(output)
     # format output so it's orgmode friendly, replace ":" with "::"
     return re.sub(":", "::", output.split()[0])
 
 
 def get_c_function_names(elf, verbose=False):
-    cmd = 'readelf -W -s %s 2>/dev/null' % elf
+    if platform.system() == 'Darwin' :
+        cmd = 'gobjdump -w -t %s 2>/dev/null' % elf
+    else :
+        cmd = 'readelf -W -s %s 2>/dev/null' % elf
     if verbose:
-        print "executing: '%s'" % cmd
-    output = subprocess.check_output(cmd, shell=True).split("\n")
+        print("executing: '%s'" % cmd)
+    output = subprocess.check_output(cmd, shell=True, encoding='utf8').split("\n")
     if verbose:
-        print "\n".join(output)
+        print("\n".join(output))
     regexp = re.compile("\s+\d+:\s+(?P<addr>[a-fA-f0-9]{4,16})\s+\w*\s+(?P<t>FUNC)\s+\w*\s+\w*\s+\w*\s+(?P<name>[\w_\-\.]+)\s*$")
     results = []
     for l in output:
@@ -67,7 +71,7 @@ class PrintEvent():
         if self.log:
             self.log.write(self.string + "\n")
         else:
-            gdb.write(self.string, gdb.STDOUT)
+            gdb.write(self.string + "\n", gdb.STDOUT)
 
 
 class EntryBreak(gdb.Breakpoint):
@@ -83,7 +87,7 @@ class EntryBreak(gdb.Breakpoint):
             try:
                 ExitBreak(self.name, self.ct, self)
             except ValueError:
-                print "Cannot set FinishBreakpoint for %s" % self.name
+                print("Cannot set FinishBreakpoint for %s" % self.name)
                 pass
             self.entered = True
         return False
@@ -91,14 +95,14 @@ class EntryBreak(gdb.Breakpoint):
 
 class ExitBreak(gdb.FinishBreakpoint):
     def __init__(self, name, ct, entry):
-        gdb.FinishBreakpoint.__init__(self, internal=1)
+        gdb.FinishBreakpoint.__init__(self, internal=True)
         self.name = name
         self.ct = ct
         self.entry = entry
 
     def out_of_scope(self):
         self.entry.entered = False
-        print "exit breakpoint for %s out of scope" % self.name
+        print("exit breakpoint for %s out of scope" % self.name)
         self.ct.exit_append(self.name, False)
 
     def stop(self):
@@ -129,7 +133,7 @@ class CallTrace(gdb.Command):
         addr = self.pc()
         outstr = ("*" * (self.depth + 1)) + " > " + name
         if self.sourceinfo:
-            outstr += " [[%s]]" % addr2line(self.elf, addr)
+            outstr += " [[%s]]" % addr2line(self.elf, addr, True)
         gdb.post_event(PrintEvent(self.depth, name,  "entry", outstr, self.log))
         self.depth += 1
 
@@ -144,18 +148,18 @@ class CallTrace(gdb.Command):
             if not self.minimal:
                 outstr += "@0x%x" % addr
             if self.sourceinfo:
-                outstr += " [[%s]]" % addr2line(self.elf, addr)
+                outstr += " [[%s]]" % addr2line(self.elf, addr, True)
         else:
             outstr += " (return out of scope)"
         gdb.post_event(PrintEvent(self.depth, name,  "exit", outstr, self.log))
 
     def finish(self, event):
         try:
-            print "Execution finished, exit code %d." % event.exit_code
+            print("Execution finished, exit code %d." % event.exit_code)
         except Exception:
-            print "Execution finished"
+            print("Execution finished")
         if self.log:
-            print "results written to %s" % self.log.name
+            print("results written to %s" % self.log.name)
             self.log.close()
 
     def invoke(self, arg, from_tty):
@@ -174,17 +178,17 @@ class CallTrace(gdb.Command):
                 self.sourceinfo = False
         elif len(args) == 2:
             if args[0] == "log":
-                print "setting log to %s" % args[1]
+                print("setting log to %s" % args[1])
                 self.log = open(args[1], "w")
         elif len(args) == 0:
             gdb.execute("r")
 
     def setup_breakpoints(self):
         self.elf = gdb.current_progspace().filename
-        print "Searching symbol table for functions, this may take a while..."
-        functions = get_c_function_names(self.elf)
+        print("Searching symbol table for functions, this may take a while...")
+        functions = get_c_function_names(self.elf, True)
         for (name, addr) in functions:
             EntryBreak(name, self)
-        print "...done."
+        print("...done.")
 
 ct = CallTrace()

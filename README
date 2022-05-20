@@ -3,6 +3,13 @@ calltrace is a gdb plugin to track flow of function calls and returns in a style
 
 USAGE
 > gdb -ex 'python execfile("<path/to/calltrace.py>")' <path/to/executable>
+> gdb -ex 'python exec(open("<path/to/calltrace.py>").read())' <path/to/executable>
+
+EXAMPLE
+> gdb -ex 'python execfile("calltrace.py")' hello
+> gdb -ex 'python exec(open("calltrace.py").read())' hello
+
+Use the second command if 'execfile' is not recognized by Python.
 
 to save output to a file:
 (gdb) calltrace log <path/to/logfile.org>
@@ -38,7 +45,7 @@ int main() {
 """
 
 You can then get the call trace via:
-> gdb -ex 'python execfile("path/to/calltrace.py")' hello
+> gdb -ex 'python exec(open("path/to/calltrace.py").read())' hello
 GNU gdb 7.11.1
 Copyright (C) 2016 Free Software Foundation, Inc.
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
