@@ -103,7 +103,7 @@ class ExitBreak(gdb.FinishBreakpoint):
     def out_of_scope(self):
         self.entry.entered = False
         print("exit breakpoint for %s out of scope" % self.name)
-        self.ct.exit_append(self.name, False)
+        self.ct.exit_append(self.name, True)
 
     def stop(self):
         self.ct.exit_append(self.name)
